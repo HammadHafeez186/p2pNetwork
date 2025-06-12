@@ -1,38 +1,43 @@
-# peer/peer_server.py
-
 import socket
 import threading
 import os
 
-ALLOWED_EXTENSIONS = ('.pdf', '.txt', '.jpg')
-CHUNK_SIZE = 1024
+CHUNK_SIZE = 1024 * 1024  # 1MB
 
-def handle_client(conn, addr, shared_dir):
+def handle_client(conn, addr, shared_dir, chunks_dir):
     try:
         file_name = conn.recv(1024).decode().strip()
-        file_path = os.path.join(shared_dir, file_name)
 
-        if not os.path.isfile(file_path) or not file_name.endswith(ALLOWED_EXTENSIONS):
-            conn.sendall(b"ERROR: File not found or unsupported format.")
+        # Check shared_dir first, then chunks_dir
+        file_path = os.path.join(shared_dir, file_name)
+        if not os.path.isfile(file_path):
+            file_path = os.path.join(chunks_dir, file_name)
+
+        if not os.path.isfile(file_path):
+            conn.sendall(b"ERROR: File not found.")
             return
 
         conn.sendall(b"OK")
+        file_size = os.path.getsize(file_path)
+        conn.sendall(str(file_size).encode())
+        conn.recv(1024)
 
         with open(file_path, 'rb') as f:
             while chunk := f.read(CHUNK_SIZE):
                 conn.sendall(chunk)
+
+        print(f"[SENT] {file_name} to {addr}")
     except Exception as e:
-        print(f"[ERROR] During file transfer: {e}")
+        print(f"[ERROR] During transfer: {e}")
     finally:
         conn.close()
 
-def start_peer_server(peer_port, shared_dir):
+def start_peer_server(peer_port, shared_dir, chunks_dir):
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server.bind(('0.0.0.0', peer_port))  # Listen on all interfaces (localhost/LAN)
+    server.bind(('0.0.0.0', peer_port))
     server.listen()
     print(f"[PEER SERVER] Listening on port {peer_port} for file requests...")
 
     while True:
         conn, addr = server.accept()
-        thread = threading.Thread(target=handle_client, args=(conn, addr, shared_dir), daemon=True)
-        thread.start()
+        threading.Thread(target=handle_client, args=(conn, addr, shared_dir, chunks_dir), daemon=True).start()

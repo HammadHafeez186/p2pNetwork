@@ -1,39 +1,24 @@
-# peer/tracker_client.py
-
 import socket
 import json
 
-def register_with_tracker(tracker_ip, tracker_port, peer_id, peer_port, shared_files):
+def register_with_tracker(tracker_ip, tracker_port, peer_id, peer_port, file_list):
     try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.connect((tracker_ip, tracker_port))
-
-        files_json = json.dumps(shared_files)
-        msg = f"REGISTER|{peer_id}|{peer_port}|{files_json}"
-        s.sendall(msg.encode())
-
-        response = s.recv(1024).decode()
-        return response
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.connect((tracker_ip, tracker_port))
+            message = f"REGISTER|{peer_id}|{peer_port}|{json.dumps(file_list)}"
+            sock.sendall(message.encode())
+            return sock.recv(1024).decode()
     except Exception as e:
-        print(f"[ERROR] Tracker registration failed: {e}")
-        return None
-    finally:
-        s.close()
+        return f"[ERROR] Tracker registration failed: {e}"
 
 def get_peers_with_file(tracker_ip, tracker_port, file_name):
     try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.connect((tracker_ip, tracker_port))
-
-        msg = f"PEER_LIST|{file_name}"
-        s.sendall(msg.encode())
-
-        data = s.recv(4096).decode()
-        peers = json.loads(data)
-        return peers
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.connect((tracker_ip, tracker_port))
+            message = f"PEER_LIST|{file_name}"
+            sock.sendall(message.encode())
+            response = sock.recv(4096).decode()
+            return json.loads(response)
     except Exception as e:
-        print(f"[ERROR] Failed to get peer list: {e}")
+        print(f"[ERROR] Fetching peer list failed: {e}")
         return []
-    finally:
-        s.close()
-

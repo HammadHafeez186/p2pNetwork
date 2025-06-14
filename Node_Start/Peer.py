@@ -8,7 +8,7 @@ from file_utils import split_file_to_chunks, count_parts, join_chunks_to_file
 from peer_utils import delete_parts, download_file
 
 # ==== Hardcoded Configuration ====
-tracker_ip, tracker_port = "192.168.1.100", 9000  # Replace with your tracker machine's LAN IP
+tracker_ip, tracker_port = "127.0.0.1", 9000  # Replace with your tracker machine's LAN IP
 peer_id, peer_port = "peer1", 5001
 
 shared_dir = "./shared"

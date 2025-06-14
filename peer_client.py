@@ -1,34 +1,31 @@
 import socket
 import os
 
-CHUNK_SIZE = 1024 * 1024  # 1MB
-
-def request_chunk_from_peer(peer_ip, peer_port, chunk_name, chunks_dir):
+def request_chunk_from_peer(ip, port, filename, save_dir):
     try:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-            sock.connect((peer_ip, peer_port))
-            sock.sendall(chunk_name.encode())
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.settimeout(5)  # prevent hanging if peer is unresponsive
+            s.connect((ip, port))
+            s.sendall(filename.encode())
 
-            response = sock.recv(1024)
-            if response != b"OK":
-                print(f"[WARN] {chunk_name} not available from {peer_ip}:{peer_port}")
-                return False
+            data = b''
+            while True:
+                chunk = s.recv(4096)
+                if not chunk:
+                    break
+                data += chunk
 
-            file_size = int(sock.recv(1024).decode())
-            sock.sendall(b"ACK")
+        if data == b"NOT_FOUND":
+            print(f"[PEER] {filename} not found on peer {ip}:{port}")
+            return False
 
-            received = 0
-            chunk_path = os.path.join(chunks_dir, chunk_name)
-            with open(chunk_path, 'wb') as f:
-                while received < file_size:
-                    data = sock.recv(min(CHUNK_SIZE, file_size - received))
-                    if not data:
-                        break
-                    f.write(data)
-                    received += len(data)
+        os.makedirs(save_dir, exist_ok=True)
+        with open(os.path.join(save_dir, filename), "wb") as f:
+            f.write(data)
 
-            print(f"[DOWNLOADED] {chunk_name} from {peer_ip}:{peer_port}")
-            return True
+        print(f"[PEER] Received {filename} from {ip}:{port}")
+        return True
+
     except Exception as e:
-        print(f"[ERROR] {chunk_name} from {peer_ip}:{peer_port} failed: {e}")
+        print(f"[ERROR] Failed to get {filename} from {ip}:{port} — {e}")
         return False

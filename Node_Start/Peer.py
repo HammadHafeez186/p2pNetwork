@@ -15,8 +15,10 @@ from file_utils import split_file_to_chunks, count_parts
 from peer_utils import download_file
 
 # === Configuration ===
-tracker_ip = "127.0.0.1"      #192.168.100.51
-tracker_port = 9000
+tracker_config = {
+    "ip": "127.0.0.1",
+    "port": 9000
+}
 
 peer_id = "peer1"             #change
 peer_port = 5001              #change
@@ -32,6 +34,29 @@ os.makedirs(chunks_dir, exist_ok=True)
 
 shared_files = {}
 token = None
+
+@app.route("/configure_tracker", methods=["POST"])
+def configure_tracker():
+    data = request.get_json()
+    
+    if not data or 'ip' not in data or 'port' not in data:
+        return jsonify({"error": "Missing IP address or port"}), 400
+    
+    try:
+        port = int(data['port'])
+        if not (0 <= port <= 65535):
+            return jsonify({"error": "Port must be between 0 and 65535"}), 400
+    except ValueError:
+        return jsonify({"error": "Invalid port number"}), 400
+    
+    # Update tracker configuration
+    tracker_config["ip"] = data['ip']
+    tracker_config["port"] = port
+    
+    return jsonify({
+        "message": "Tracker configuration updated successfully",
+        "config": tracker_config
+    })
 
 @app.route("/start_peer", methods=["Get", "POST"])
 def start_peer():
@@ -49,12 +74,12 @@ def start_peer():
     download_targets = [f for f in target_files if f not in shared_files]
 
     # Authenticate
-    token = authenticate_with_tracker(tracker_ip, tracker_port, peer_id)
+    token = authenticate_with_tracker(tracker_config["ip"], tracker_config["port"], peer_id)
     if not token:
         return jsonify({"error": "Authentication failed"}), 401
 
     # Register
-    resp = register_with_tracker(tracker_ip, tracker_port, peer_id, token, peer_port, shared_files)
+    resp = register_with_tracker(tracker_config["ip"], tracker_config["port"], peer_id, token, peer_port, shared_files)
 
     # Start peer server in background
     threading.Thread(target=start_peer_server, args=(peer_port, shared_dir, chunks_dir), daemon=True).start()
@@ -74,7 +99,7 @@ def download(filename):
 
     t = threading.Thread(
         target=download_file,
-        args=(filename, peer_id, tracker_ip, tracker_port, token, chunks_dir, download_dir, get_peers_with_file)
+        args=(filename, peer_id, tracker_config["ip"], tracker_config["port"], token, chunks_dir, download_dir, get_peers_with_file)
     )
     t.start()
     return jsonify({"message": f"Download started for {filename}"}), 202

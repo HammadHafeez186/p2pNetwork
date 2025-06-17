@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import threading, os, sys, time
+import threading, os, sys, time, json
  
 # === Flask App ===
 app = Flask(__name__)
@@ -15,18 +15,46 @@ from file_utils import split_file_to_chunks, count_parts
 from peer_utils import download_file
 
 # === Configuration ===
-tracker_config = {
-    "ip": "127.0.0.1",
-    "port": 9000
-}
+CONFIG_FILE = "peer_config.json"
 
-peer_id = "peer1"             #change
-peer_port = 5001              #change
+def load_config():
+    default_config = {
+        "tracker": {
+            "ip": "127.0.0.1",
+            "port": 9000
+        },
+        "peer": {
+            "id": "peer1",
+            "port": 5001
+        },
+        "target_files": []  # Initialize empty target files list
+    }
+    
+    try:
+        if os.path.exists(CONFIG_FILE):
+            with open(CONFIG_FILE, 'r') as f:
+                return json.load(f)
+        return default_config
+    except Exception as e:
+        print(f"Error loading config: {e}")
+        return default_config
+
+def save_config(config):
+    try:
+        with open(CONFIG_FILE, 'w') as f:
+            json.dump(config, f, indent=4)
+    except Exception as e:
+        print(f"Error saving config: {e}")
+
+config = load_config()
+tracker_config = config["tracker"]
+peer_id = config["peer"]["id"]
+peer_port = config["peer"]["port"]
+target_files = config.get("target_files", [])
 
 shared_dir = "./shared"
 download_dir = "./downloads"
 chunks_dir = os.path.join(download_dir, "chunks")
-target_files = ["Notes.txt"]
 
 os.makedirs(shared_dir, exist_ok=True)
 os.makedirs(download_dir, exist_ok=True)
@@ -34,6 +62,41 @@ os.makedirs(chunks_dir, exist_ok=True)
 
 shared_files = {}
 token = None
+
+@app.route("/add_target_file", methods=["POST"])
+def add_target_file():
+    data = request.get_json()
+    
+    if not data or 'filename' not in data:
+        return jsonify({"error": "Missing filename"}), 400
+    
+    filename = data['filename']
+    
+    # Check if file is already in target files
+    if filename in target_files:
+        return jsonify({"message": f"{filename} is already in target files"}), 200
+    
+    # Check if file is already shared
+    if filename in shared_files:
+        return jsonify({"error": f"{filename} is already shared"}), 400
+    
+    # Add to target files
+    target_files.append(filename)
+    
+    # Update config
+    config["target_files"] = target_files
+    save_config(config)
+    
+    return jsonify({
+        "message": f"Added {filename} to target files",
+        "target_files": target_files
+    })
+
+@app.route("/get_target_files", methods=["GET"])
+def get_target_files():
+    return jsonify({
+        "target_files": target_files
+    })
 
 @app.route("/configure_tracker", methods=["POST"])
 def configure_tracker():
@@ -53,9 +116,39 @@ def configure_tracker():
     tracker_config["ip"] = data['ip']
     tracker_config["port"] = port
     
+    # Save the updated configuration
+    config["tracker"] = tracker_config
+    save_config(config)
+    
     return jsonify({
         "message": "Tracker configuration updated successfully",
         "config": tracker_config
+    })
+
+@app.route("/configure_peer", methods=["POST"])
+def configure_peer():
+    data = request.get_json()
+    
+    if not data or 'peer_id' not in data or 'port' not in data:
+        return jsonify({"error": "Missing peer ID or port"}), 400
+    
+    try:
+        port = int(data['port'])
+        if not (0 <= port <= 65535):
+            return jsonify({"error": "Port must be between 0 and 65535"}), 400
+    except ValueError:
+        return jsonify({"error": "Invalid port number"}), 400
+    
+    # Update peer configuration
+    config["peer"]["id"] = data['peer_id']
+    config["peer"]["port"] = port
+    
+    # Save the updated configuration
+    save_config(config)
+    
+    return jsonify({
+        "message": "Peer configuration updated successfully",
+        "config": config["peer"]
     })
 
 @app.route("/start_peer", methods=["Get", "POST"])

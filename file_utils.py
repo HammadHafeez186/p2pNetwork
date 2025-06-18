@@ -37,3 +37,14 @@ def count_parts(chunks_dir, filename):
         1 for f in os.listdir(chunks_dir)
         if f.startswith(f"{filename}.part") and os.path.isfile(os.path.join(chunks_dir, f))
     )
+
+def delete_parts(filename, chunks_dir):
+    """Delete all chunk files for a specific filename"""
+    try:
+        for f in os.listdir(chunks_dir):
+            if f.startswith(f"{filename}.part") and os.path.isfile(os.path.join(chunks_dir, f)):
+                os.remove(os.path.join(chunks_dir, f))
+        print(f"[CLEANUP] Deleted parts for '{filename}'")
+    except Exception as e:
+        print(f"[ERROR] Failed to delete parts for {filename}: {e}")
+        raise e

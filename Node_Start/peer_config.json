@@ -1,10 +1,13 @@
 {
     "tracker": {
-        "ip": "127.0.0.1",
+        "ip": "192.168.243.118",
         "port": 9000
     },
     "peer": {
         "id": "peer1",
         "port": 5001
-    }
+    },
+    "target_files": [
+        "Notes.txt"
+    ]
 }

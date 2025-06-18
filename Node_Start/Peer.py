@@ -51,6 +51,8 @@ config = load_config()
 tracker_config = config["tracker"]
 peer_id = config["peer"]["id"]
 peer_port = config["peer"]["port"]
+# Use a different port for P2P socket server
+p2p_port = peer_port + 1000  # e.g., 5001 -> 6001
 target_files = config.get("target_files", [])
 
 shared_dir = "./shared"
@@ -177,10 +179,10 @@ def start_peer():
         return jsonify({"error": "Authentication failed"}), 401
 
     # Register
-    resp = register_with_tracker(tracker_config["ip"], tracker_config["port"], peer_id, token, peer_port, shared_files)
+    resp = register_with_tracker(tracker_config["ip"], tracker_config["port"], peer_id, token, p2p_port, shared_files)
 
     # Start peer server in background
-    threading.Thread(target=start_peer_server, args=(peer_port, shared_dir, chunks_dir), daemon=True).start()
+    threading.Thread(target=start_peer_server, args=(p2p_port, shared_dir, chunks_dir), daemon=True).start()
 
     return jsonify({
         "peer_id": peer_id,
@@ -318,7 +320,7 @@ def share_file():
         
         # Register with tracker if connected
         if token:
-            register_with_tracker(tracker_config["ip"], tracker_config["port"], peer_id, token, peer_port, shared_files)
+            register_with_tracker(tracker_config["ip"], tracker_config["port"], peer_id, token, p2p_port, shared_files)
         
         return jsonify({
             "message": f"File {file.filename} shared successfully",
@@ -336,7 +338,8 @@ def get_status():
     """Get current peer status"""
     return jsonify({
         "peer_id": peer_id,
-        "port": peer_port,
+        "flask_port": peer_port,
+        "p2p_port": p2p_port,
         "tracker_connected": token is not None,
         "tracker_config": tracker_config,
         "shared_files": shared_files,
